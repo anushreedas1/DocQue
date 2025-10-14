@@ -2,11 +2,15 @@
  * Configuration constants for the Knowledge Base Search Engine
  */
 
+// Environment detection
+export const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+export const IS_DEVELOPMENT = process.env.NODE_ENV === 'development';
+
 // API Configuration
 export const API_CONFIG = {
   BASE_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
-  TIMEOUT: 30000, // 30 seconds
-  RETRY_ATTEMPTS: 3,
+  TIMEOUT: IS_PRODUCTION ? 60000 : 30000, // 60 seconds in production, 30 in dev
+  RETRY_ATTEMPTS: IS_PRODUCTION ? 2 : 3, // Fewer retries in production
 } as const;
 
 // File Upload Configuration
@@ -39,6 +43,13 @@ export const ERROR_MESSAGES = {
   QUERY_FAILED: 'Failed to process your query. Please try again.',
   DELETE_FAILED: 'Failed to delete document. Please try again.',
   GENERIC_ERROR: 'An unexpected error occurred. Please try again.',
+  API_UNAVAILABLE: 'Service temporarily unavailable. Please try again later.',
+} as const;
+
+// Logging Configuration
+export const LOGGING_CONFIG = {
+  ENABLED: IS_DEVELOPMENT || process.env.NEXT_PUBLIC_ENABLE_LOGGING === 'true',
+  LEVEL: IS_PRODUCTION ? 'error' : 'debug',
 } as const;
 
 // Success Messages

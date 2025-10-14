@@ -10,6 +10,9 @@ export type {
     QueryResponse,
 } from '@/lib/api';
 
+// Import for internal use
+import type { QueryResponse } from '@/lib/api';
+
 // Additional UI-specific types
 export interface UploadProgress {
     file: File;

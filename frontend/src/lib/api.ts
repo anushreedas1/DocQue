@@ -3,8 +3,10 @@
  * Handles communication with the FastAPI backend
  */
 
+import { API_CONFIG, IS_PRODUCTION, LOGGING_CONFIG } from './config';
+
 // API configuration
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = API_CONFIG.BASE_URL;
 
 // API client class
 export class ApiClient {
@@ -15,61 +17,140 @@ export class ApiClient {
   }
 
   /**
-   * Generic fetch wrapper with error handling
+   * Generic fetch wrapper with error handling and retry logic
    */
   private async fetchWithErrorHandling<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
-    
-    try {
-      const response = await fetch(url, {
-        ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers,
-        },
-      });
+    let lastError: Error | null = null;
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new ApiError(
-          response.status,
-          errorData.detail || `HTTP ${response.status}: ${response.statusText}`
-        );
-      }
+    // Retry logic for production stability
+    for (let attempt = 1; attempt <= API_CONFIG.RETRY_ATTEMPTS; attempt++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
 
-      return await response.json();
-    } catch (error) {
-      if (error instanceof ApiError) {
-        throw error;
+        const response = await fetch(url, {
+          ...options,
+          headers: {
+            'Content-Type': 'application/json',
+            ...options.headers,
+          },
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          const errorMessage = errorData.detail || `HTTP ${response.status}: ${response.statusText}`;
+
+          // Log error in development or when logging is enabled
+          if (LOGGING_CONFIG.ENABLED) {
+            console.error(`API Error (attempt ${attempt}):`, {
+              url,
+              status: response.status,
+              message: errorMessage,
+            });
+          }
+
+          throw new ApiError(response.status, errorMessage);
+        }
+
+        return await response.json();
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error('Unknown error');
+
+        // Log retry attempts
+        if (LOGGING_CONFIG.ENABLED && attempt < API_CONFIG.RETRY_ATTEMPTS) {
+          console.warn(`API request failed (attempt ${attempt}/${API_CONFIG.RETRY_ATTEMPTS}):`, lastError.message);
+        }
+
+        // Don't retry on client errors (4xx) or if it's the last attempt
+        if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
+          throw error;
+        }
+
+        if (attempt === API_CONFIG.RETRY_ATTEMPTS) {
+          break;
+        }
+
+        // Wait before retrying (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt - 1) * 1000));
       }
-      throw new ApiError(0, `Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+
+    // If we get here, all retries failed
+    if (lastError instanceof ApiError) {
+      throw lastError;
+    }
+
+    throw new ApiError(0, `Network error after ${API_CONFIG.RETRY_ATTEMPTS} attempts: ${lastError?.message || 'Unknown error'}`);
   }
 
   /**
-   * Upload a document to the backend
+   * Upload a document to the backend with retry logic
    */
   async uploadDocument(file: File): Promise<UploadResponse> {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await fetch(`${this.baseUrl}/documents/upload`, {
-      method: 'POST',
-      body: formData,
-    });
+    let lastError: Error | null = null;
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new ApiError(
-        response.status,
-        errorData.detail || `Upload failed: ${response.statusText}`
-      );
+    // Retry logic for file uploads
+    for (let attempt = 1; attempt <= API_CONFIG.RETRY_ATTEMPTS; attempt++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
+
+        const response = await fetch(`${this.baseUrl}/documents/upload`, {
+          method: 'POST',
+          body: formData,
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          const errorMessage = errorData.detail || `Upload failed: ${response.statusText}`;
+
+          if (LOGGING_CONFIG.ENABLED) {
+            console.error(`Upload Error (attempt ${attempt}):`, {
+              filename: file.name,
+              status: response.status,
+              message: errorMessage,
+            });
+          }
+
+          throw new ApiError(response.status, errorMessage);
+        }
+
+        return await response.json();
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error('Unknown error');
+
+        if (LOGGING_CONFIG.ENABLED && attempt < API_CONFIG.RETRY_ATTEMPTS) {
+          console.warn(`Upload failed (attempt ${attempt}/${API_CONFIG.RETRY_ATTEMPTS}):`, lastError.message);
+        }
+
+        // Don't retry on client errors (4xx)
+        if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
+          throw error;
+        }
+
+        if (attempt === API_CONFIG.RETRY_ATTEMPTS) {
+          break;
+        }
+
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt - 1) * 1000));
+      }
     }
 
-    return await response.json();
+    throw new ApiError(0, `Upload failed after ${API_CONFIG.RETRY_ATTEMPTS} attempts: ${lastError?.message || 'Unknown error'}`);
   }
 
   /**

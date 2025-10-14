@@ -1,5 +1,6 @@
 """API routes for document management and querying"""
 
+import logging
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
 from typing import List
@@ -8,6 +9,8 @@ import io
 from .storage import document_storage
 from .models import QueryRequest, QueryResponse
 from .services import document_processor, llm_service
+
+logger = logging.getLogger(__name__)
 
 # Create router for document endpoints
 documents_router = APIRouter(prefix="/documents", tags=["documents"])
@@ -18,9 +21,12 @@ query_router = APIRouter(prefix="/query", tags=["query"])
 async def upload_document(file: UploadFile = File(...)):
     """Upload and process a document (PDF or TXT)"""
     
+    logger.info(f"Document upload request: {file.filename}, type: {file.content_type}")
+    
     # Validate file type
     allowed_types = ["application/pdf", "text/plain"]
     if file.content_type not in allowed_types:
+        logger.warning(f"Unsupported file type attempted: {file.content_type}")
         raise HTTPException(
             status_code=400, 
             detail=f"Unsupported file type. Only PDF and TXT files are allowed."
@@ -45,12 +51,14 @@ async def upload_document(file: UploadFile = File(...)):
         
         # Store the document
         doc_id = document_storage.store_document(file.filename, text_content)
+        logger.info(f"Document stored with ID: {doc_id}")
         
         # Process the document (chunk and generate embeddings)
         processing_success = document_processor.process_document(doc_id)
         
         if not processing_success:
             # If processing fails, remove the document and raise error
+            logger.error(f"Failed to process document {doc_id}")
             document_storage.delete_document(doc_id)
             raise HTTPException(
                 status_code=500,
@@ -59,6 +67,7 @@ async def upload_document(file: UploadFile = File(...)):
         
         # Get the processed document to return chunk count
         processed_doc = document_storage.get_document(doc_id)
+        logger.info(f"Document {doc_id} processed successfully with {len(processed_doc.chunks)} chunks")
         
         return JSONResponse(
             status_code=200,
@@ -72,11 +81,13 @@ async def upload_document(file: UploadFile = File(...)):
         )
         
     except UnicodeDecodeError:
+        logger.error(f"Unicode decode error for file: {file.filename}")
         raise HTTPException(
             status_code=400,
             detail="Unable to decode text file. Please ensure it's in UTF-8 format."
         )
     except Exception as e:
+        logger.error(f"Error processing document {file.filename}: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Error processing document: {str(e)}"
@@ -120,8 +131,11 @@ async def delete_document(document_id: str):
 async def query_documents(request: QueryRequest):
     """Query documents and return relevant information"""
     
+    logger.info(f"Query request: '{request.query}' (max_results: {request.max_results})")
+    
     # Validate query
     if not request.query.strip():
+        logger.warning("Empty query submitted")
         raise HTTPException(
             status_code=400,
             detail="Query cannot be empty"
@@ -139,11 +153,14 @@ async def query_documents(request: QueryRequest):
         
         # If no relevant chunks found
         if not relevant_chunks:
+            logger.info(f"No relevant chunks found for query: '{request.query}'")
             return QueryResponse(
                 answer="No relevant information found in the uploaded documents.",
                 sources=[],
                 confidence=0.0
             )
+        
+        logger.info(f"Found {len(relevant_chunks)} relevant chunks for query")
         
         # Use LLM to synthesize answer from relevant chunks
         answer = llm_service.synthesize_answer(request.query, relevant_chunks)
@@ -156,6 +173,8 @@ async def query_documents(request: QueryRequest):
                 source_info = f"{doc.filename} (chunk {chunk.chunk_index + 1})"
                 sources.append(source_info)
         
+        logger.info(f"Query processed successfully, answer length: {len(answer)}")
+        
         return QueryResponse(
             answer=answer,
             sources=sources,
@@ -163,6 +182,7 @@ async def query_documents(request: QueryRequest):
         )
         
     except Exception as e:
+        logger.error(f"Error processing query '{request.query}': {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Error processing query: {str(e)}"

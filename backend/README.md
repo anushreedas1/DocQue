@@ -1,50 +1,33 @@
 # Knowledge Base Search Engine - Backend
 
-A FastAPI-based backend for the Knowledge Base Search Engine that provides document processing and RAG-based query functionality.
+FastAPI-based backend for document processing and RAG-based query functionality.
 
-## Setup
+## Quick Start
 
-1. Create and activate a virtual environment:
-```bash
-python -m venv venv
-# On Windows:
-venv\Scripts\activate
-# On macOS/Linux:
-source venv/bin/activate
-```
+1. **Setup environment**:
+   ```bash
+   python -m venv venv
+   venv\Scripts\activate  # Windows
+   # source venv/bin/activate  # macOS/Linux
+   pip install -r requirements.txt
+   ```
 
-2. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+2. **Configure environment**:
+   Create `.env` file:
+   ```env
+   OPENAI_API_KEY=your_openai_api_key_here
+   ```
 
-3. Set up environment variables:
-Create a `.env` file with your OpenAI API key:
-```
-OPENAI_API_KEY=your_openai_api_key_here
-```
-
-## Running the Application
-
-### Development
-```bash
-python run.py
-```
-
-### Production
-```bash
-python main.py
-```
-
-The API will be available at `http://localhost:8000`
+3. **Run development server**:
+   ```bash
+   python run.py
+   ```
 
 ## API Documentation
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
+- Health Check: `http://localhost:8000/health`
 
-Once running, visit:
-- API docs: `http://localhost:8000/docs`
-- Alternative docs: `http://localhost:8000/redoc`
+---
 
-## Health Check
-
-- Root endpoint: `GET /`
-- Health check: `GET /health`
+📖 **For complete setup, deployment, and configuration instructions, see the [main README](../README.md)**
