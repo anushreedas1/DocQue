@@ -213,8 +213,11 @@ export default function DocumentList({
   selectedDocuments = [], 
   showSelection = false 
 }: DocumentListProps) {
-  const { documents, isLoading, error, deleteDocument, refreshDocuments } = useApi();
+  const { documents: rawDocuments, isLoading, error, deleteDocument, refreshDocuments } = useApi();
   const [localError, setLocalError] = useState<string | null>(null);
+  
+  // Ensure documents is always an array
+  const documents = Array.isArray(rawDocuments) ? rawDocuments : [];
 
   useEffect(() => {
     refreshDocuments();
@@ -234,7 +237,7 @@ export default function DocumentList({
     refreshDocuments();
   };
 
-  if (isLoading && (!documents || documents.length === 0)) {
+  if (isLoading && documents.length === 0) {
     return (
       <motion.div 
         className="flex items-center justify-center py-12"
@@ -274,7 +277,7 @@ export default function DocumentList({
               animate={{ scale: [1, 1.05, 1] }}
               transition={{ duration: 2, repeat: Infinity }}
             >
-              {documents?.length || 0}
+              {documents.length}
             </motion.span>
           </h2>
           {showSelection && selectedDocuments.length > 0 && (
@@ -324,7 +327,7 @@ export default function DocumentList({
 
       {/* Document List */}
       <AnimatePresence mode="wait">
-        {(!documents || documents.length === 0) ? (
+        {documents.length === 0 ? (
           <motion.div 
             className="text-center py-16"
             initial={{ opacity: 0, scale: 0.9 }}
@@ -376,7 +379,7 @@ export default function DocumentList({
             exit={{ opacity: 0 }}
           >
             <AnimatePresence>
-              {(documents || []).map((document, index) => (
+              {documents.map((document, index) => (
                 <motion.div
                   key={document.id}
                   initial={{ opacity: 0, y: 20 }}
@@ -399,7 +402,7 @@ export default function DocumentList({
 
       {/* Loading Overlay for Refresh */}
       <AnimatePresence>
-        {isLoading && documents && documents.length > 0 && (
+        {isLoading && documents.length > 0 && (
           <motion.div 
             className="absolute inset-0 glass rounded-2xl flex items-center justify-center"
             initial={{ opacity: 0 }}

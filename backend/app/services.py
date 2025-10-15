@@ -114,8 +114,11 @@ class LLMService:
         if not api_key:
             raise ValueError("OPENAI_API_KEY environment variable is required")
         
-        self.client = OpenAI(api_key=api_key)
-        self.model = "gpt-3.5-turbo"  # Using GPT-3.5 for cost efficiency
+        self.client = OpenAI(
+            api_key=api_key,
+            base_url="https://openrouter.ai/api/v1"
+        )
+        self.model = "openai/gpt-3.5-turbo"  # OpenRouter model format
     
     def synthesize_answer(self, query: str, relevant_chunks: List[DocumentChunk]) -> str:
         """Synthesize an answer using LLM based on query and relevant document chunks"""

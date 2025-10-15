@@ -59,33 +59,35 @@ export default function Home() {
     <div className="min-h-screen relative">
       {/* Animated Background */}
       <div className="animated-bg"></div>
-      
+
       {/* Floating Particles */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        {[...Array(20)].map((_, i) => (
-          <motion.div
-            key={i}
-            className="absolute w-2 h-2 bg-white/20 rounded-full"
-            initial={{
-              x: Math.random() * windowSize.width,
-              y: Math.random() * windowSize.height,
-            }}
-            animate={{
-              y: [null, Math.random() * windowSize.height],
-              x: [null, Math.random() * windowSize.width],
-            }}
-            transition={{
-              duration: Math.random() * 10 + 10,
-              repeat: Infinity,
-              repeatType: "reverse",
-              ease: "linear"
-            }}
-          />
-        ))}
-      </div>
+      {isClient && (
+        <div className="fixed inset-0 overflow-hidden pointer-events-none">
+          {[...Array(20)].map((_, i) => (
+            <motion.div
+              key={i}
+              className="absolute w-2 h-2 bg-white/20 rounded-full"
+              initial={{
+                x: Math.random() * windowSize.width,
+                y: Math.random() * windowSize.height,
+              }}
+              animate={{
+                y: [null, Math.random() * windowSize.height],
+                x: [null, Math.random() * windowSize.width],
+              }}
+              transition={{
+                duration: Math.random() * 10 + 10,
+                repeat: Infinity,
+                repeatType: "reverse",
+                ease: "linear"
+              }}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Header */}
-      <motion.header 
+      <motion.header
         className="glass border-b border-white/10 sticky top-0 z-50"
         initial={{ y: -100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -117,7 +119,7 @@ export default function Home() {
                 </div>
               </div>
             </motion.div>
-            
+
             <motion.div
               className="flex items-center space-x-4"
               initial={{ x: 50, opacity: 0 }}
@@ -142,11 +144,11 @@ export default function Home() {
           animate="visible"
         >
           {/* Hero Section */}
-          <motion.div 
+          <motion.div
             className="text-center py-12"
             variants={itemVariants}
           >
-            <motion.h2 
+            <motion.h2
               className="text-5xl font-bold bg-gradient-to-r from-white via-blue-200 to-purple-200 bg-clip-text text-transparent mb-6"
               initial={{ scale: 0.5, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -154,25 +156,25 @@ export default function Home() {
             >
               Transform Your Documents
             </motion.h2>
-            <motion.p 
+            <motion.p
               className="text-xl text-white/80 max-w-3xl mx-auto leading-relaxed"
               initial={{ y: 30, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.7 }}
             >
-              Upload, analyze, and query your documents with the power of AI. 
+              Upload, analyze, and query your documents with the power of AI.
               Get instant answers and insights from your knowledge base.
             </motion.p>
           </motion.div>
 
           {/* Search Section */}
-          <motion.div 
+          <motion.div
             className="glass-card rounded-2xl p-8 relative overflow-hidden"
             variants={itemVariants}
           >
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-full blur-3xl"></div>
             <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-pink-500/20 to-yellow-500/20 rounded-full blur-2xl"></div>
-            
+
             <div className="relative z-10">
               <div className="flex items-center space-x-3 mb-6">
                 <div className="p-2 glass rounded-lg">
@@ -189,7 +191,7 @@ export default function Home() {
                   AI Enhanced
                 </motion.div>
               </div>
-              
+
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <motion.div
                   whileHover={{ scale: 1.02 }}
@@ -209,17 +211,17 @@ export default function Home() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Upload Section */}
-            <motion.div 
+            <motion.div
               className="space-y-6"
               variants={itemVariants}
             >
-              <motion.div 
+              <motion.div
                 className="glass-card rounded-2xl p-8 relative overflow-hidden"
                 whileHover={{ scale: 1.02 }}
                 transition={{ type: "spring", stiffness: 300 }}
               >
                 <div className="absolute top-0 right-0 w-28 h-28 bg-gradient-to-br from-green-500/20 to-blue-500/20 rounded-full blur-2xl"></div>
-                
+
                 <div className="relative z-10">
                   <div className="flex items-center space-x-3 mb-6">
                     <div className="p-2 glass rounded-lg">
@@ -242,17 +244,17 @@ export default function Home() {
             </motion.div>
 
             {/* Document Management Section */}
-            <motion.div 
+            <motion.div
               className="space-y-6"
               variants={itemVariants}
             >
-              <motion.div 
+              <motion.div
                 className="glass-card rounded-2xl p-8 relative overflow-hidden"
                 whileHover={{ scale: 1.02 }}
                 transition={{ type: "spring", stiffness: 300 }}
               >
                 <div className="absolute top-0 left-0 w-32 h-32 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-full blur-3xl"></div>
-                
+
                 <div className="relative z-10">
                   <div className="flex items-center space-x-3 mb-6">
                     <div className="p-2 glass rounded-lg">
@@ -276,7 +278,7 @@ export default function Home() {
           </div>
 
           {/* Features Section */}
-          <motion.div 
+          <motion.div
             className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-16"
             variants={itemVariants}
           >
@@ -304,13 +306,16 @@ export default function Home() {
                 key={index}
                 className="glass-card rounded-xl p-6 text-center relative overflow-hidden group"
                 whileHover={{ y: -5, scale: 1.05 }}
-                transition={{ type: "spring", stiffness: 300 }}
                 initial={{ y: 50, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
-                delay={0.8 + index * 0.1}
+                transition={{
+                  type: "spring",
+                  stiffness: 300,
+                  delay: 0.8 + index * 0.1
+                }}
               >
                 <div className={`absolute inset-0 bg-gradient-to-br ${feature.gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-300`}></div>
-                
+
                 <div className="relative z-10">
                   <div className="mx-auto w-12 h-12 glass rounded-lg flex items-center justify-center mb-4">
                     <feature.icon className="w-6 h-6 text-white" />
