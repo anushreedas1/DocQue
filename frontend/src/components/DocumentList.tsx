@@ -399,7 +399,7 @@ export default function DocumentList({
 
       {/* Loading Overlay for Refresh */}
       <AnimatePresence>
-        {isLoading && documents.length > 0 && (
+        {isLoading && documents && documents.length > 0 && (
           <motion.div 
             className="absolute inset-0 glass rounded-2xl flex items-center justify-center"
             initial={{ opacity: 0 }}

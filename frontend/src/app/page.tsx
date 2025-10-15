@@ -10,8 +10,10 @@ export default function Home() {
   const [searchResults, setSearchResults] = useState<QueryResponse | null>(null);
   const [currentQuery, setCurrentQuery] = useState<string>('');
   const [windowSize, setWindowSize] = useState({ width: 1200, height: 800 });
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
+    setIsClient(true);
     const updateWindowSize = () => {
       setWindowSize({ width: window.innerWidth, height: window.innerHeight });
     };
