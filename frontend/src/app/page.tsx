@@ -11,6 +11,7 @@ export default function Home() {
   const [currentQuery, setCurrentQuery] = useState<string>('');
   const [windowSize, setWindowSize] = useState({ width: 1200, height: 800 });
   const [isClient, setIsClient] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
@@ -18,9 +19,20 @@ export default function Home() {
       setWindowSize({ width: window.innerWidth, height: window.innerHeight });
     };
 
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 50);
+    };
+
     updateWindowSize();
+    handleScroll();
+    
     window.addEventListener('resize', updateWindowSize);
-    return () => window.removeEventListener('resize', updateWindowSize);
+    window.addEventListener('scroll', handleScroll);
+    
+    return () => {
+      window.removeEventListener('resize', updateWindowSize);
+      window.removeEventListener('scroll', handleScroll);
+    };
   }, []);
 
   const handleSearchResults = (results: QueryResponse) => {
@@ -88,7 +100,9 @@ export default function Home() {
 
       {/* Header */}
       <motion.header
-        className="glass border-b border-white/10 sticky top-0 z-50"
+        className={`border-b border-white/10 sticky top-0 z-50 transition-all duration-300 ${
+          isScrolled ? 'glass-scrolled' : 'glass'
+        }`}
         initial={{ y: -100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ type: "spring", stiffness: 100, damping: 20 }}
