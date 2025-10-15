@@ -14,7 +14,7 @@ backend/.env/
 backend/ENV/
 backend/env.bak/
 backend/venv.bak/
-
+backend/app/__pycache__
 # Python cache and compiled files
 backend/__pycache__/
 backend/*.py[cod]

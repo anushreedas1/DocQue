@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useApi } from '@/contexts/ApiContext';
 import type { QueryResponse } from '@/types';
+import { Search, Sparkles, AlertCircle, Loader2, Send } from 'lucide-react';
 
 interface SearchQueryProps {
   onResults: (results: QueryResponse) => void;
@@ -53,61 +55,151 @@ export function SearchQuery({ onResults, onQueryChange, disabled = false }: Sear
 
   return (
     <div className="w-full">
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-6">
         <div>
-          <label htmlFor="search-query" className="block text-sm font-medium text-gray-700 mb-2">
-            Search Query
+          <label htmlFor="search-query" className="block text-sm font-medium text-white/80 mb-3 flex items-center space-x-2">
+            <Search className="w-4 h-4" />
+            <span>Ask anything about your documents</span>
           </label>
-          <div className="relative">
-            <input
+          
+          <div className="relative group">
+            <motion.input
               id="search-query"
               type="text"
               value={query}
               onChange={handleInputChange}
-              placeholder="Ask a question about your documents..."
+              placeholder="What would you like to know?"
               disabled={isDisabled}
               className={`
-                w-full px-4 py-3 border rounded-lg shadow-sm
-                focus:ring-2 focus:ring-blue-500 focus:border-blue-500
-                disabled:bg-gray-100 disabled:cursor-not-allowed
-                ${searchError ? 'border-red-300' : 'border-gray-300'}
+                w-full px-6 py-4 glass-card rounded-xl text-white placeholder-white/50
+                focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-blue-400/50
+                disabled:cursor-not-allowed disabled:opacity-50
+                transition-all duration-300
+                ${searchError ? 'ring-2 ring-red-400/50 border-red-400/50' : 'border-white/20'}
               `}
+              whileFocus={{ scale: 1.02 }}
+              animate={isSearching ? { 
+                boxShadow: "0 0 20px rgba(59, 130, 246, 0.3)" 
+              } : {}}
             />
-            {isSearching && (
-              <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
-              </div>
-            )}
+            
+            {/* Animated border */}
+            <motion.div
+              className="absolute inset-0 rounded-xl pointer-events-none"
+              style={{
+                background: 'linear-gradient(45deg, #667eea, #764ba2, #f093fb, #f5576c)',
+                backgroundSize: '400% 400%',
+                padding: '2px',
+                mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                maskComposite: 'xor',
+                WebkitMaskComposite: 'xor',
+              }}
+              animate={query ? {
+                backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'],
+                opacity: [0, 0.5, 0]
+              } : { opacity: 0 }}
+              transition={{ duration: 3, repeat: Infinity }}
+            />
+            
+            {/* Search icon or loading spinner */}
+            <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
+              <AnimatePresence mode="wait">
+                {isSearching ? (
+                  <motion.div
+                    key="loading"
+                    initial={{ opacity: 0, scale: 0 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0 }}
+                  >
+                    <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="search"
+                    initial={{ opacity: 0, scale: 0 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0 }}
+                    className="p-1 glass rounded-lg"
+                  >
+                    <Sparkles className="w-4 h-4 text-white/60" />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
 
-        {searchError && (
-          <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3">
-            {searchError}
-          </div>
-        )}
+        {/* Error Message */}
+        <AnimatePresence>
+          {searchError && (
+            <motion.div 
+              className="glass-card rounded-xl p-4 border border-red-400/30 bg-red-500/10"
+              initial={{ opacity: 0, y: -10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+            >
+              <div className="flex items-center space-x-2 text-red-400">
+                <AlertCircle className="w-4 h-4" />
+                <span className="text-sm">{searchError}</span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        <button
+        {/* Submit Button */}
+        <motion.button
           type="submit"
           disabled={isDisabled || !query.trim()}
           className={`
-            w-full px-4 py-3 rounded-lg font-medium transition-colors
+            w-full px-6 py-4 rounded-xl font-semibold transition-all duration-300
+            relative overflow-hidden group
             ${
               isDisabled || !query.trim()
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
+                ? 'glass cursor-not-allowed opacity-50 text-white/50'
+                : 'glass-card text-white hover:scale-[1.02] hover:shadow-lg'
             }
           `}
+          whileHover={!isDisabled && query.trim() ? { 
+            scale: 1.02,
+            boxShadow: "0 0 25px rgba(99, 102, 241, 0.4)"
+          } : {}}
+          whileTap={!isDisabled && query.trim() ? { scale: 0.98 } : {}}
         >
-          {isSearching ? (
-            <span className="flex items-center justify-center">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-              Searching...
-            </span>
-          ) : (
-            'Search Documents'
-          )}
-        </button>
+          {/* Button background gradient */}
+          <motion.div
+            className="absolute inset-0 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 opacity-0 group-hover:opacity-20 transition-opacity duration-300"
+            animate={isSearching ? { opacity: [0, 0.3, 0] } : {}}
+            transition={{ duration: 2, repeat: Infinity }}
+          />
+          
+          <div className="relative z-10 flex items-center justify-center space-x-2">
+            <AnimatePresence mode="wait">
+              {isSearching ? (
+                <motion.div
+                  key="searching"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="flex items-center space-x-2"
+                >
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Analyzing documents...</span>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="search"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="flex items-center space-x-2"
+                >
+                  <Send className="w-5 h-5" />
+                  <span>Search with AI</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </motion.button>
       </form>
     </div>
   );

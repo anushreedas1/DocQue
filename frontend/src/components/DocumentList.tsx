@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useApi } from '@/contexts/ApiContext';
 import { Document } from '@/lib/api';
+import { FileText, Trash2, RefreshCw, AlertCircle, Calendar, Eye, Download } from 'lucide-react';
 
 interface DocumentItemProps {
   document: Document;
@@ -63,80 +65,140 @@ function DocumentItem({ document, onDelete, onSelect, selected }: DocumentItemPr
   };
 
   return (
-    <div
+    <motion.div
       className={`
-        p-4 border rounded-lg transition-all duration-200
+        glass-card rounded-xl p-4 relative overflow-hidden group
+        transition-all duration-300
         ${selected 
-          ? 'border-blue-300 bg-blue-50' 
-          : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
+          ? 'ring-2 ring-blue-400/50 bg-blue-500/10' 
+          : 'hover:scale-[1.02] hover:shadow-lg'
         }
         ${isDeleting ? 'opacity-50 pointer-events-none' : ''}
       `}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20, scale: 0.95 }}
+      whileHover={{ y: -2 }}
+      layout
     >
-      <div className="flex items-center justify-between">
-        <div 
-          className="flex items-center space-x-3 flex-1 cursor-pointer"
-          onClick={() => onSelect?.(document.id)}
-        >
-          <span className="text-2xl">{getFileIcon(document.filename)}</span>
-          <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-medium text-gray-900 truncate">
-              {document.filename}
-            </h3>
-            <p className="text-xs text-gray-500 mt-1">
-              Uploaded {formatDate(document.upload_date)}
-            </p>
+      {/* Gradient overlay */}
+      <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+      
+      <div className="relative z-10">
+        <div className="flex items-center justify-between">
+          <motion.div 
+            className="flex items-center space-x-4 flex-1 cursor-pointer"
+            onClick={() => onSelect?.(document.id)}
+            whileHover={{ x: 5 }}
+            transition={{ type: "spring", stiffness: 300 }}
+          >
+            <motion.div
+              className="p-3 glass rounded-lg"
+              whileHover={{ scale: 1.1, rotate: 5 }}
+            >
+              <FileText className="w-6 h-6 text-blue-400" />
+            </motion.div>
+            
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-semibold text-white truncate mb-1">
+                {document.filename}
+              </h3>
+              <div className="flex items-center space-x-2 text-xs text-white/60">
+                <Calendar className="w-3 h-3" />
+                <span>Uploaded {formatDate(document.upload_date)}</span>
+              </div>
+            </div>
+          </motion.div>
+
+          <div className="flex items-center space-x-2 ml-4">
+            {/* Action Buttons */}
+            <motion.button
+              className="p-2 glass rounded-lg text-white/60 hover:text-blue-400 transition-colors"
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.95 }}
+              title="View document"
+            >
+              <Eye className="w-4 h-4" />
+            </motion.button>
+
+            {/* Delete Button */}
+            <AnimatePresence mode="wait">
+              {!showDeleteConfirm ? (
+                <motion.button
+                  key="delete"
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="p-2 glass rounded-lg text-white/60 hover:text-red-400 transition-colors"
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.95 }}
+                  title="Delete document"
+                  initial={{ opacity: 0, scale: 0 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0 }}
+                >
+                  {isDeleting ? (
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </motion.div>
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                </motion.button>
+              ) : (
+                <motion.div
+                  key="confirm"
+                  className="flex items-center space-x-2"
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                >
+                  <motion.button
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                    className="px-3 py-1 text-xs bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    Confirm
+                  </motion.button>
+                  <motion.button
+                    onClick={handleCancelDelete}
+                    disabled={isDeleting}
+                    className="px-3 py-1 text-xs glass text-white/80 rounded-lg hover:bg-white/10 transition-colors"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    Cancel
+                  </motion.button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 
-        <div className="flex items-center space-x-2 ml-4">
-          {/* Delete Button */}
-          {!showDeleteConfirm ? (
-            <button
-              onClick={handleDelete}
-              disabled={isDeleting}
-              className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
-              title="Delete document"
-            >
-              {isDeleting ? (
-                <div className="w-4 h-4 border-2 border-gray-300 border-t-red-500 rounded-full animate-spin" />
-              ) : (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              )}
-            </button>
-          ) : (
-            <div className="flex items-center space-x-1">
-              <button
-                onClick={handleDelete}
-                disabled={isDeleting}
-                className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
-              >
-                Confirm
-              </button>
-              <button
-                onClick={handleCancelDelete}
-                disabled={isDeleting}
-                className="px-2 py-1 text-xs bg-gray-300 text-gray-700 rounded hover:bg-gray-400 transition-colors"
-              >
-                Cancel
-              </button>
+        {/* Document Content Preview */}
+        {document.content && (
+          <motion.div 
+            className="mt-4 pt-4 border-t border-white/10"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            transition={{ delay: 0.2 }}
+          >
+            <div className="flex items-center space-x-2 mb-2">
+              <Eye className="w-3 h-3 text-white/50" />
+              <span className="text-xs text-white/50">Preview</span>
             </div>
-          )}
-        </div>
+            <p className="text-xs text-white/70 line-clamp-3 leading-relaxed">
+              {document.content.substring(0, 200)}
+              {document.content.length > 200 ? '...' : ''}
+            </p>
+          </motion.div>
+        )}
       </div>
-
-      {/* Document Content Preview (if available) */}
-      {document.content && (
-        <div className="mt-3 pt-3 border-t border-gray-100">
-          <p className="text-xs text-gray-600 line-clamp-2">
-            {document.content.substring(0, 150)}
-            {document.content.length > 150 ? '...' : ''}
-          </p>
-        </div>
-      )}
-    </div>
+    </motion.div>
   );
 }
 
@@ -174,12 +236,22 @@ export default function DocumentList({
 
   if (isLoading && documents.length === 0) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="flex items-center space-x-2 text-gray-500">
-          <div className="w-5 h-5 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
-          <span>Loading documents...</span>
+      <motion.div 
+        className="flex items-center justify-center py-12"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+      >
+        <div className="flex items-center space-x-3 text-white/70">
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+            className="p-2 glass rounded-lg"
+          >
+            <RefreshCw className="w-5 h-5 text-blue-400" />
+          </motion.div>
+          <span className="text-lg">Loading documents...</span>
         </div>
-      </div>
+      </motion.div>
     );
   }
 
@@ -188,78 +260,165 @@ export default function DocumentList({
   return (
     <div className="w-full">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <motion.div 
+        className="flex items-center justify-between mb-6"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">
-            Documents ({documents.length})
+          <h2 className="text-xl font-bold text-white flex items-center space-x-2">
+            <FileText className="w-6 h-6 text-purple-400" />
+            <span>Documents</span>
+            <motion.span
+              className="px-2 py-1 text-sm glass rounded-full text-purple-300"
+              animate={{ scale: [1, 1.05, 1] }}
+              transition={{ duration: 2, repeat: Infinity }}
+            >
+              {documents.length}
+            </motion.span>
           </h2>
           {showSelection && selectedDocuments.length > 0 && (
-            <p className="text-sm text-gray-500">
+            <motion.p 
+              className="text-sm text-white/60 mt-1"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+            >
               {selectedDocuments.length} selected
-            </p>
+            </motion.p>
           )}
         </div>
-        <button
+        
+        <motion.button
           onClick={handleRefresh}
           disabled={isLoading}
-          className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+          className="p-3 glass rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+          whileHover={{ scale: 1.05, rotate: 5 }}
+          whileTap={{ scale: 0.95 }}
           title="Refresh documents"
         >
-          <svg 
-            className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} 
-            fill="none" 
-            stroke="currentColor" 
-            viewBox="0 0 24 24"
+          <motion.div
+            animate={isLoading ? { rotate: 360 } : { rotate: 0 }}
+            transition={isLoading ? { duration: 1, repeat: Infinity, ease: "linear" } : {}}
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-        </button>
-      </div>
+            <RefreshCw className="w-5 h-5" />
+          </motion.div>
+        </motion.button>
+      </motion.div>
 
       {/* Error Display */}
-      {displayError && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-          <div className="flex items-center space-x-2">
-            <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span className="text-sm text-red-700">{displayError}</span>
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {displayError && (
+          <motion.div 
+            className="mb-6 glass-card rounded-xl p-4 border border-red-400/30 bg-red-500/10"
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+          >
+            <div className="flex items-center space-x-3">
+              <AlertCircle className="w-5 h-5 text-red-400" />
+              <span className="text-sm text-red-300">{displayError}</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Document List */}
-      {documents.length === 0 ? (
-        <div className="text-center py-12">
-          <div className="text-6xl mb-4">📚</div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No documents yet</h3>
-          <p className="text-gray-500">
-            Upload some documents to get started with your knowledge base.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {documents.map((document) => (
-            <DocumentItem
-              key={document.id}
-              document={document}
-              onDelete={handleDelete}
-              onSelect={onDocumentSelect}
-              selected={showSelection && selectedDocuments.includes(document.id)}
-            />
-          ))}
-        </div>
-      )}
+      <AnimatePresence mode="wait">
+        {documents.length === 0 ? (
+          <motion.div 
+            className="text-center py-16"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+          >
+            <motion.div
+              className="mx-auto w-24 h-24 glass rounded-full flex items-center justify-center mb-6"
+              animate={{ 
+                scale: [1, 1.1, 1],
+                rotate: [0, 5, -5, 0]
+              }}
+              transition={{ duration: 4, repeat: Infinity }}
+            >
+              <FileText className="w-12 h-12 text-white/40" />
+            </motion.div>
+            
+            <h3 className="text-2xl font-bold text-white mb-3">No documents yet</h3>
+            <p className="text-white/70 max-w-md mx-auto">
+              Upload some documents to get started with your AI-powered knowledge base.
+            </p>
+            
+            {/* Floating elements */}
+            {[...Array(3)].map((_, i) => (
+              <motion.div
+                key={i}
+                className="absolute w-2 h-2 bg-white/20 rounded-full"
+                style={{
+                  left: `${40 + i * 20}%`,
+                  top: `${60 + (i % 2) * 10}%`,
+                }}
+                animate={{
+                  y: [0, -20, 0],
+                  opacity: [0.3, 1, 0.3],
+                }}
+                transition={{
+                  duration: 3 + i,
+                  repeat: Infinity,
+                  delay: i * 0.5,
+                }}
+              />
+            ))}
+          </motion.div>
+        ) : (
+          <motion.div 
+            className="space-y-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <AnimatePresence>
+              {documents.map((document, index) => (
+                <motion.div
+                  key={document.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20, scale: 0.95 }}
+                  transition={{ delay: index * 0.1 }}
+                >
+                  <DocumentItem
+                    document={document}
+                    onDelete={handleDelete}
+                    onSelect={onDocumentSelect}
+                    selected={showSelection && selectedDocuments.includes(document.id)}
+                  />
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Loading Overlay for Refresh */}
-      {isLoading && documents.length > 0 && (
-        <div className="absolute inset-0 bg-white bg-opacity-50 flex items-center justify-center">
-          <div className="flex items-center space-x-2 text-gray-500">
-            <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
-            <span className="text-sm">Refreshing...</span>
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {isLoading && documents.length > 0 && (
+          <motion.div 
+            className="absolute inset-0 glass rounded-2xl flex items-center justify-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div className="flex items-center space-x-3 text-white">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                className="p-2 glass rounded-lg"
+              >
+                <RefreshCw className="w-5 h-5 text-blue-400" />
+              </motion.div>
+              <span className="text-lg">Refreshing...</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
