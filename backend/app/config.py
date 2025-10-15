@@ -17,7 +17,7 @@ class Settings:
     
     # CORS Configuration
     ALLOWED_ORIGINS: List[str] = (
-        os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+        os.getenv("*", "http://localhost:3000").split(",")
         if os.getenv("ALLOWED_ORIGINS")
         else [
             "http://localhost:3000",
@@ -30,7 +30,7 @@ class Settings:
     def cors_origins(self) -> List[str]:
         if self.ENVIRONMENT == "production":
             # In production, use specific origins from environment variable
-            return os.getenv("ALLOWED_ORIGINS", "").split(",") if os.getenv("ALLOWED_ORIGINS") else []
+            return os.getenv("*", "").split(",") if os.getenv("ALLOWED_ORIGINS") else []
         return self.ALLOWED_ORIGINS
     
     # File Upload Configuration
