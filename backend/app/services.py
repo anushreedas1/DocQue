@@ -114,9 +114,14 @@ class LLMService:
         if not api_key:
             raise ValueError("OPENAI_API_KEY environment variable is required")
         
+        # Initialize OpenAI client with OpenRouter configuration
         self.client = OpenAI(
             api_key=api_key,
-            base_url="https://openrouter.ai/api/v1"
+            base_url="https://openrouter.ai/api/v1",
+            default_headers={
+                "HTTP-Referer": "https://your-app.com",  # Optional: your app URL
+                "X-Title": "Document QA App"  # Optional: your app name
+            }
         )
         self.model = "openai/gpt-3.5-turbo"  # OpenRouter model format
     

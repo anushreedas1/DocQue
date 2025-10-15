@@ -4,5 +4,5 @@ python-multipart==0.0.6
 PyPDF2==3.0.1
 sentence-transformers==2.2.2
 huggingface_hub==0.16.4
-openai==1.51.0
+openai==1.35.0
 python-dotenv==1.0.0
