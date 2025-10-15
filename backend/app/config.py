@@ -15,23 +15,10 @@ class Settings:
     # Environment Configuration
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
     
-    # CORS Configuration
-    ALLOWED_ORIGINS: List[str] = (
-        os.getenv("*", "http://localhost:3000").split(",")
-        if os.getenv("ALLOWED_ORIGINS")
-        else [
-            "http://localhost:3000",
-            "https://*.vercel.app",
-        ]
-    )
-    
-    # Production CORS - more restrictive for production
+    # CORS Configuration - Allow all origins
     @property
     def cors_origins(self) -> List[str]:
-        if self.ENVIRONMENT == "production":
-            # In production, use specific origins from environment variable
-            return os.getenv("*", "").split(",") if os.getenv("ALLOWED_ORIGINS") else []
-        return self.ALLOWED_ORIGINS
+        return ["*"]
     
     # File Upload Configuration
     MAX_FILE_SIZE: int = 10 * 1024 * 1024  # 10MB

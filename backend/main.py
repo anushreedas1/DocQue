@@ -19,15 +19,14 @@ app = FastAPI(
     version=settings.API_VERSION
 )
 
-# Configure CORS for frontend communication
-cors_origins = settings.cors_origins
-logger.info(f"Configuring CORS for origins: {cors_origins}")
+# Configure CORS for frontend communication - Allow everything
+logger.info("Configuring CORS to allow all origins")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "DELETE"],
+    allow_credentials=False,  # Must be False when allow_origins=["*"]
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
