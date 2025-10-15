@@ -3,6 +3,8 @@
 from typing import List
 import re
 import os
+import requests
+import json
 from sentence_transformers import SentenceTransformer
 from openai import OpenAI
 from .models import DocumentChunk
@@ -110,20 +112,12 @@ class LLMService:
     
     def __init__(self):
         """Initialize OpenAI client"""
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
+        self.api_key = os.getenv("OPENAI_API_KEY")
+        if not self.api_key:
             raise ValueError("OPENAI_API_KEY environment variable is required")
         
-        # Initialize OpenAI client with OpenRouter configuration
-        self.client = OpenAI(
-            api_key=api_key,
-            base_url="https://openrouter.ai/api/v1",
-            default_headers={
-                "HTTP-Referer": "https://your-app.com",  # Optional: your app URL
-                "X-Title": "Document QA App"  # Optional: your app name
-            }
-        )
-        self.model = "openai/gpt-3.5-turbo"  # OpenRouter model format
+        self.base_url = "https://openrouter.ai/api/v1/chat/completions"
+        self.model = "openai/gpt-3.5-turbo"
     
     def synthesize_answer(self, query: str, relevant_chunks: List[DocumentChunk]) -> str:
         """Synthesize an answer using LLM based on query and relevant document chunks"""
@@ -156,9 +150,16 @@ User question: {query}
 Please provide a clear, concise answer based on the information in the documents. If the documents don't contain enough information to fully answer the question, mention what information is available and what might be missing."""
         
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://your-app.com",
+                "X-Title": "Document QA App"
+            }
+            
+            payload = {
+                "model": self.model,
+                "messages": [
                     {
                         "role": "system", 
                         "content": "You are a helpful assistant that answers questions based on provided document content. Be accurate and cite the information appropriately."
@@ -168,11 +169,15 @@ Please provide a clear, concise answer based on the information in the documents
                         "content": prompt
                     }
                 ],
-                max_tokens=500,
-                temperature=0.3  # Lower temperature for more consistent, factual responses
-            )
+                "max_tokens": 500,
+                "temperature": 0.3
+            }
             
-            return response.choices[0].message.content.strip()
+            response = requests.post(self.base_url, headers=headers, json=payload, timeout=30)
+            response.raise_for_status()
+            
+            result = response.json()
+            return result["choices"][0]["message"]["content"].strip()
             
         except Exception as e:
             # Fallback to basic concatenation if LLM fails
