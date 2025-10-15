@@ -4,23 +4,23 @@ const nextConfig = {
   experimental: {
     // Add any experimental features here
   },
-  
+
   // Environment variables validation
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
     NEXT_PUBLIC_ENVIRONMENT: process.env.NEXT_PUBLIC_ENVIRONMENT,
   },
-  
+
   // Production optimizations
   poweredByHeader: false,
   compress: true,
-  
+
   // Image optimization
   images: {
     domains: [],
     formats: ['image/webp', 'image/avif'],
   },
-  
+
   // CORS and API configuration for development
   async rewrites() {
     // Only use rewrites in development to avoid CORS issues
@@ -28,13 +28,13 @@ const nextConfig = {
       return [
         {
           source: '/api/:path*',
-          destination: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/:path*`,
+          destination: 'https://docque.onrender.com/:path*',
         },
       ];
     }
     return [];
   },
-  
+
   // Headers for security and performance
   async headers() {
     return [

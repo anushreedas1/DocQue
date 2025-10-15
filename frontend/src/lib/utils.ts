@@ -76,7 +76,7 @@ export function debounce<T extends (...args: any[]) => any>(
  */
 export async function checkApiHealth(): Promise<boolean> {
   try {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = 'https://docque.onrender.com';
     const response = await fetch(`${apiUrl}/health`, {
       method: 'GET',
       headers: {

@@ -8,7 +8,7 @@ export const IS_DEVELOPMENT = process.env.NODE_ENV === 'development';
 
 // API Configuration
 export const API_CONFIG = {
-  BASE_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
+  BASE_URL: 'https://docque.onrender.com',
   TIMEOUT: IS_PRODUCTION ? 60000 : 30000, // 60 seconds in production, 30 in dev
   RETRY_ATTEMPTS: IS_PRODUCTION ? 2 : 3, // Fewer retries in production
 } as const;
