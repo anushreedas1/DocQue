@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { FileUpload, DocumentList, SearchQuery, AnswerDisplay } from '@/components';
 import type { QueryResponse } from '@/types';
@@ -9,6 +9,17 @@ import { Search, Upload, FileText, Sparkles, Brain, Zap } from 'lucide-react';
 export default function Home() {
   const [searchResults, setSearchResults] = useState<QueryResponse | null>(null);
   const [currentQuery, setCurrentQuery] = useState<string>('');
+  const [windowSize, setWindowSize] = useState({ width: 1200, height: 800 });
+
+  useEffect(() => {
+    const updateWindowSize = () => {
+      setWindowSize({ width: window.innerWidth, height: window.innerHeight });
+    };
+
+    updateWindowSize();
+    window.addEventListener('resize', updateWindowSize);
+    return () => window.removeEventListener('resize', updateWindowSize);
+  }, []);
 
   const handleSearchResults = (results: QueryResponse) => {
     setSearchResults(results);
@@ -54,12 +65,12 @@ export default function Home() {
             key={i}
             className="absolute w-2 h-2 bg-white/20 rounded-full"
             initial={{
-              x: Math.random() * window.innerWidth,
-              y: Math.random() * window.innerHeight,
+              x: Math.random() * windowSize.width,
+              y: Math.random() * windowSize.height,
             }}
             animate={{
-              y: [null, Math.random() * window.innerHeight],
-              x: [null, Math.random() * window.innerWidth],
+              y: [null, Math.random() * windowSize.height],
+              x: [null, Math.random() * windowSize.width],
             }}
             transition={{
               duration: Math.random() * 10 + 10,

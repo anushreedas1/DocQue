@@ -234,7 +234,7 @@ export default function DocumentList({
     refreshDocuments();
   };
 
-  if (isLoading && documents.length === 0) {
+  if (isLoading && (!documents || documents.length === 0)) {
     return (
       <motion.div 
         className="flex items-center justify-center py-12"
@@ -274,7 +274,7 @@ export default function DocumentList({
               animate={{ scale: [1, 1.05, 1] }}
               transition={{ duration: 2, repeat: Infinity }}
             >
-              {documents.length}
+              {documents?.length || 0}
             </motion.span>
           </h2>
           {showSelection && selectedDocuments.length > 0 && (
@@ -376,7 +376,7 @@ export default function DocumentList({
             exit={{ opacity: 0 }}
           >
             <AnimatePresence>
-              {documents.map((document, index) => (
+              {(documents || []).map((document, index) => (
                 <motion.div
                   key={document.id}
                   initial={{ opacity: 0, y: 20 }}
