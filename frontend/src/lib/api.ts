@@ -157,7 +157,8 @@ export class ApiClient {
    * Get list of uploaded documents
    */
   async getDocuments(): Promise<Document[]> {
-    return this.fetchWithErrorHandling<Document[]>('/documents');
+    const response = await this.fetchWithErrorHandling<{ documents: Document[] }>('/documents/');
+    return response.documents;
   }
 
   /**
@@ -173,7 +174,7 @@ export class ApiClient {
    * Submit a query and get synthesized answer
    */
   async submitQuery(query: string, maxResults: number = 5): Promise<QueryResponse> {
-    return this.fetchWithErrorHandling<QueryResponse>('/query', {
+    return this.fetchWithErrorHandling<QueryResponse>('/query/', {
       method: 'POST',
       body: JSON.stringify({
         query,
