@@ -324,7 +324,7 @@ export default function DocumentList({
 
       {/* Document List */}
       <AnimatePresence mode="wait">
-        {documents.length === 0 ? (
+        {(!documents || documents.length === 0) ? (
           <motion.div 
             className="text-center py-16"
             initial={{ opacity: 0, scale: 0.9 }}
