@@ -17,6 +17,19 @@ documents_router = APIRouter(prefix="/documents", tags=["documents"])
 query_router = APIRouter(prefix="/query", tags=["query"])
 
 
+@documents_router.post("/upload/minimal")
+async def minimal_upload():
+    """Minimal upload endpoint for testing"""
+    return JSONResponse(
+        status_code=200,
+        content={"message": "Minimal upload endpoint working"},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
+
 @documents_router.post("/upload/test")
 async def test_upload(file: UploadFile = File(...)):
     """Simple upload test endpoint without processing"""
@@ -33,6 +46,11 @@ async def test_upload(file: UploadFile = File(...)):
                 "filename": file.filename,
                 "content_type": file.content_type,
                 "size": len(file_content)
+            },
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "*",
+                "Access-Control-Allow-Headers": "*",
             }
         )
     except Exception as e:
@@ -81,55 +99,26 @@ async def upload_document(file: UploadFile = File(...)):
         doc_id = document_storage.store_document(file.filename, text_content)
         logger.info(f"Document stored with ID: {doc_id}")
         
-        # Try to process the document (chunk and generate embeddings)
-        try:
-            processing_success = get_document_processor().process_document(doc_id)
-            
-            if not processing_success:
-                logger.warning(f"Document processing failed for {doc_id}, but document is stored")
-                # Don't fail the upload, just warn
-                processed_doc = document_storage.get_document(doc_id)
-                return JSONResponse(
-                    status_code=200,
-                    content={
-                        "message": "Document uploaded successfully (processing failed)",
-                        "document_id": doc_id,
-                        "filename": file.filename,
-                        "content_length": len(text_content),
-                        "chunks_created": 0,
-                        "warning": "Document processing failed, search functionality may be limited"
-                    }
-                )
-            
-            # Get the processed document to return chunk count
-            processed_doc = document_storage.get_document(doc_id)
-            logger.info(f"Document {doc_id} processed successfully with {len(processed_doc.chunks)} chunks")
-            
-            return JSONResponse(
-                status_code=200,
-                content={
-                    "message": "Document uploaded and processed successfully",
-                    "document_id": doc_id,
-                    "filename": file.filename,
-                    "content_length": len(text_content),
-                    "chunks_created": len(processed_doc.chunks)
-                }
-            )
-            
-        except Exception as processing_error:
-            logger.error(f"Document processing failed for {doc_id}: {str(processing_error)}")
-            # Don't fail the upload, just return without processing
-            return JSONResponse(
-                status_code=200,
-                content={
-                    "message": "Document uploaded successfully (processing failed)",
-                    "document_id": doc_id,
-                    "filename": file.filename,
-                    "content_length": len(text_content),
-                    "chunks_created": 0,
-                    "warning": f"Document processing failed: {str(processing_error)}"
-                }
-            )
+        # Return immediately without processing to avoid timeout
+        # Processing can be done asynchronously later
+        logger.info(f"Document {doc_id} uploaded successfully, skipping processing to avoid timeout")
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "message": "Document uploaded successfully",
+                "document_id": doc_id,
+                "filename": file.filename,
+                "content_length": len(text_content),
+                "chunks_created": 0,
+                "note": "Document processing will be done asynchronously"
+            },
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "*",
+                "Access-Control-Allow-Headers": "*",
+            }
+        )
         
     except UnicodeDecodeError:
         logger.error(f"Unicode decode error for file: {file.filename}")
@@ -166,6 +155,53 @@ async def list_documents():
         ]
     }
 
+
+@documents_router.post("/{document_id}/process")
+async def process_document_endpoint(document_id: str):
+    """Process a document that was uploaded but not processed"""
+    logger.info(f"Processing document: {document_id}")
+    
+    try:
+        # Check if document exists
+        document = document_storage.get_document(document_id)
+        if not document:
+            raise HTTPException(
+                status_code=404,
+                detail="Document not found"
+            )
+        
+        # Process the document
+        processing_success = get_document_processor().process_document(document_id)
+        
+        if processing_success:
+            processed_doc = document_storage.get_document(document_id)
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "message": "Document processed successfully",
+                    "document_id": document_id,
+                    "chunks_created": len(processed_doc.chunks)
+                },
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "*",
+                    "Access-Control-Allow-Headers": "*",
+                }
+            )
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail="Document processing failed"
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error processing document {document_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing document: {str(e)}"
+        )
 
 @documents_router.delete("/{document_id}")
 async def delete_document(document_id: str):

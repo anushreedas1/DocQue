@@ -15,16 +15,10 @@ class Settings:
     # Environment Configuration (Hardcoded for production)
     ENVIRONMENT: str = "production"
     
-    # CORS Configuration (Hardcoded for production)
+    # CORS Configuration (Allow all domains)
     @property
     def cors_origins(self) -> List[str]:
-        return [
-            "https://doc-que.vercel.app",
-            "https://docque.vercel.app", 
-            "https://*.vercel.app",
-            "http://localhost:3000",  # For development
-            "*"  # Allow all for now
-        ]
+        return ["*"]  # Allow all domains
     
     # File Upload Configuration (Hardcoded)
     MAX_FILE_SIZE: int = 10485760  # 10MB in bytes

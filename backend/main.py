@@ -29,10 +29,10 @@ logger.info(f"Configuring CORS with origins: {cors_origins}")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
+    allow_origins=["*"],  # Allow all origins
+    allow_credentials=False,  # Must be False when allow_origins=["*"]
+    allow_methods=["*"],  # Allow all methods
+    allow_headers=["*"],  # Allow all headers
 )
 
 @app.get("/")
@@ -75,6 +75,32 @@ async def health_check():
     except Exception as e:
         logger.error(f"Health check failed: {str(e)}")
         return {"status": "unhealthy", "error": str(e)}
+
+@app.options("/documents/upload")
+async def upload_options():
+    """Handle preflight OPTIONS request for upload"""
+    return JSONResponse(
+        status_code=200,
+        content={"message": "CORS preflight OK"},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
+
+@app.get("/test/cors")
+async def test_cors():
+    """Simple CORS test endpoint"""
+    return JSONResponse(
+        status_code=200,
+        content={"message": "CORS test successful", "timestamp": "2024-10-16"},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
 
 @app.get("/health/services")
 async def services_health_check():
