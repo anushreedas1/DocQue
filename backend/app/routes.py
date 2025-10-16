@@ -56,29 +56,52 @@ async def upload_document(file: UploadFile = File(...)):
         doc_id = document_storage.store_document(file.filename, text_content)
         logger.info(f"Document stored with ID: {doc_id}")
         
-        # Try lightweight processing (just chunking, no embeddings)
+        # Try to process the document with embeddings (with timeout protection)
         chunks_created = 0
+        processing_note = "Document stored successfully"
+        
         try:
-            # Simple text chunking without embeddings to avoid timeout
-            chunk_size = 500
-            chunks = []
+            # First try full processing with embeddings
+            logger.info(f"Attempting full processing for document {doc_id}")
+            processing_success = get_document_processor().process_document(doc_id)
             
-            # Split into chunks
-            for i in range(0, len(text_content), chunk_size):
-                chunk = text_content[i:i + chunk_size]
-                if chunk.strip():
-                    chunks.append(chunk.strip())
+            if processing_success:
+                processed_doc = document_storage.get_document(doc_id)
+                if processed_doc and processed_doc.chunks:
+                    chunks_created = len(processed_doc.chunks)
+                    processing_note = "Document processed with embeddings for intelligent search"
+                    logger.info(f"Document {doc_id} fully processed with {chunks_created} chunks and embeddings")
+                else:
+                    raise Exception("Processing returned success but no chunks created")
+            else:
+                raise Exception("Document processing returned failure")
+                
+        except Exception as processing_error:
+            logger.warning(f"Full processing failed for {doc_id}: {str(processing_error)}, trying lightweight processing")
             
-            # Store chunks in document (without embeddings)
-            document = document_storage.get_document(doc_id)
-            if document:
-                document.chunks = chunks
-                chunks_created = len(chunks)
-            
-            logger.info(f"Document {doc_id} processed with {chunks_created} chunks (no embeddings)")
-            
-        except Exception as e:
-            logger.warning(f"Lightweight processing failed for {doc_id}: {str(e)}")
+            # Fallback to lightweight processing (just chunking, no embeddings)
+            try:
+                chunk_size = 500
+                chunks = []
+                
+                # Split into chunks
+                for i in range(0, len(text_content), chunk_size):
+                    chunk = text_content[i:i + chunk_size]
+                    if chunk.strip():
+                        chunks.append(chunk.strip())
+                
+                # Store chunks in document (without embeddings)
+                document = document_storage.get_document(doc_id)
+                if document:
+                    document.chunks = chunks
+                    chunks_created = len(chunks)
+                    processing_note = "Document processed with basic chunking (limited search capability)"
+                
+                logger.info(f"Document {doc_id} processed with {chunks_created} chunks (no embeddings)")
+                
+            except Exception as fallback_error:
+                logger.warning(f"Even lightweight processing failed for {doc_id}: {str(fallback_error)}")
+                processing_note = "Document stored but not processed (search may be limited)"
         
         return JSONResponse(
             status_code=200,
@@ -88,7 +111,7 @@ async def upload_document(file: UploadFile = File(...)):
                 "filename": file.filename,
                 "content_length": len(text_content),
                 "chunks_created": chunks_created,
-                "note": "Document is ready for searching"
+                "note": processing_note
             },
             headers={
                 "Access-Control-Allow-Origin": "*",
@@ -227,9 +250,36 @@ async def query_documents(request: QueryRequest):
                 }
             )
         
-        # Enhanced search with multiple strategies
+        # Enhanced search with multiple strategies and semantic understanding
         query_lower = request.query.lower()
         query_words = [word.strip() for word in query_lower.split() if len(word.strip()) > 2]
+        
+        # Expand query for better semantic matching
+        semantic_expansions = {
+            'name': ['name', 'called', 'named', 'title'],
+            'what': ['what', 'who', 'which'],
+            'where': ['where', 'location', 'place', 'address'],
+            'when': ['when', 'date', 'time'],
+            'how': ['how', 'method', 'way'],
+            'email': ['email', 'mail', 'contact'],
+            'phone': ['phone', 'number', 'contact', 'mobile'],
+            'work': ['work', 'job', 'company', 'employer'],
+            'education': ['education', 'school', 'university', 'degree', 'study']
+        }
+        
+        # Add semantic expansions to query words
+        expanded_words = set(query_words)
+        for word in query_words:
+            for key, expansions in semantic_expansions.items():
+                if word in expansions:
+                    expanded_words.update(expansions)
+        
+        query_words = list(expanded_words)
+        
+        # For questions like "what is my name", we should always try LLM synthesis
+        # even if there are no direct keyword matches
+        question_indicators = ['what', 'who', 'where', 'when', 'how', 'tell', 'describe']
+        is_question = any(indicator in query_lower for indicator in question_indicators)
         
         # Strategy 1: Exact phrase matching
         exact_matches = []
@@ -259,6 +309,10 @@ async def query_documents(request: QueryRequest):
                 score = (matched_words / len(query_words)) * 0.7 + min(word_score / 10, 0.3)
                 word_matches.append((doc, score))
             
+            # For questions, include all documents with lower score for LLM analysis
+            elif is_question:
+                partial_matches.append((doc, 0.4))  # Give questions a chance
+            
             # Check for partial word matches (for typos, etc.)
             elif len(query_words) == 1 and len(query_words[0]) > 4:
                 query_word = query_words[0]
@@ -279,8 +333,67 @@ async def query_documents(request: QueryRequest):
                 unique_matches.append((doc, score))
                 seen_docs.add(doc.id)
         
+        # For questions, ensure we have at least some matches to work with
+        if is_question and not unique_matches:
+            # Include all documents for question analysis
+            for doc in documents:
+                unique_matches.append((doc, 0.5))  # Medium score for questions
+        
         if not unique_matches:
-            # Provide helpful response with document overview
+            # Try to use LLM to answer from full document content even without matches
+            try:
+                logger.info(f"No direct matches found, trying LLM synthesis with full document content")
+                
+                # Create chunks from all documents for LLM analysis
+                from .models import DocumentChunk
+                all_chunks = []
+                
+                for doc in documents:
+                    # Use document chunks if available, otherwise create from content
+                    if hasattr(doc, 'chunks') and doc.chunks:
+                        for i, chunk_content in enumerate(doc.chunks[:3]):  # Limit chunks per doc
+                            chunk = DocumentChunk(
+                                document_id=doc.id,
+                                chunk_index=i,
+                                content=chunk_content,
+                                embedding=None
+                            )
+                            all_chunks.append(chunk)
+                    else:
+                        # Create chunk from document content
+                        content_preview = doc.content[:800]  # Limit content size
+                        chunk = DocumentChunk(
+                            document_id=doc.id,
+                            chunk_index=0,
+                            content=content_preview,
+                            embedding=None
+                        )
+                        all_chunks.append(chunk)
+                
+                # Try LLM synthesis
+                llm_service = get_llm_service()
+                answer = llm_service.synthesize_answer(request.query, all_chunks)
+                
+                # Check if LLM provided a meaningful answer
+                if answer and len(answer.strip()) > 20 and "no relevant information" not in answer.lower():
+                    return JSONResponse(
+                        status_code=200,
+                        content={
+                            "answer": answer,
+                            "sources": [doc.filename for doc in documents],
+                            "confidence": 0.6  # Medium confidence for LLM synthesis
+                        },
+                        headers={
+                            "Access-Control-Allow-Origin": "*",
+                            "Access-Control-Allow-Methods": "*",
+                            "Access-Control-Allow-Headers": "*",
+                        }
+                    )
+                    
+            except Exception as llm_error:
+                logger.warning(f"LLM synthesis for no-matches failed: {str(llm_error)}")
+            
+            # Fallback to document overview
             doc_topics = []
             for doc in documents[:3]:  # Show first 3 documents
                 # Extract first few sentences as topic summary
@@ -304,53 +417,94 @@ async def query_documents(request: QueryRequest):
                 }
             )
         
-        # Generate intelligent answer from matches
-        answer_parts = []
-        sources = []
-        max_results = min(request.max_results, len(unique_matches))
-        
-        for doc, score in unique_matches[:max_results]:
-            content_lower = doc.content.lower()
+        # Use AI to synthesize intelligent answer from matches
+        try:
+            # Collect relevant contexts from matching documents
+            relevant_contexts = []
+            sources = []
+            max_results = min(request.max_results, len(unique_matches))
             
-            # Find the best context for this document
-            contexts = []
-            
-            # Look for exact phrase first
-            if query_lower in content_lower:
-                pos = content_lower.find(query_lower)
-                start = max(0, pos - 150)
-                end = min(len(doc.content), pos + len(request.query) + 150)
-                context = doc.content[start:end].strip()
-                contexts.append(context)
-            
-            # Look for sentences containing query words
-            sentences = doc.content.split('.')
-            for sentence in sentences:
-                sentence_lower = sentence.lower()
-                word_count = sum(1 for word in query_words if word in sentence_lower)
-                if word_count > 0:
-                    contexts.append(sentence.strip())
-                    if len(contexts) >= 2:  # Limit contexts per document
-                        break
-            
-            # Use the best context
-            if contexts:
-                best_context = max(contexts, key=len) if len(contexts) > 1 else contexts[0]
-                # Clean up the context
-                if not best_context.endswith('.'):
-                    best_context += "..."
+            for doc, score in unique_matches[:max_results]:
+                # Get relevant chunks or full content
+                if hasattr(doc, 'chunks') and doc.chunks:
+                    # Use chunks if available
+                    for chunk in doc.chunks[:3]:  # Limit chunks per document
+                        relevant_contexts.append({
+                            'content': chunk,
+                            'filename': doc.filename,
+                            'score': score
+                        })
+                else:
+                    # Use full document content (truncated)
+                    content_preview = doc.content[:1000] + "..." if len(doc.content) > 1000 else doc.content
+                    relevant_contexts.append({
+                        'content': content_preview,
+                        'filename': doc.filename,
+                        'score': score
+                    })
                 
-                confidence_indicator = "High" if score > 0.8 else "Medium" if score > 0.5 else "Low"
-                answer_parts.append(f"**From {doc.filename}** ({confidence_indicator} relevance):\n{best_context}")
                 sources.append(doc.filename)
-        
-        # Create final answer
-        if answer_parts:
-            answer = "\n\n".join(answer_parts)
-            overall_confidence = max(score for _, score in unique_matches[:max_results])
-        else:
-            answer = f"Found some references to '{request.query}' but couldn't extract clear information."
-            overall_confidence = 0.2
+            
+            # Use LLM to synthesize answer if we have any matches
+            if relevant_contexts:
+                try:
+                    # Create document chunks for LLM
+                    from .models import DocumentChunk
+                    llm_chunks = []
+                    
+                    for i, context in enumerate(relevant_contexts):
+                        chunk = DocumentChunk(
+                            document_id=f"temp_{i}",
+                            chunk_index=i,
+                            content=context['content'],
+                            embedding=None
+                        )
+                        llm_chunks.append(chunk)
+                    
+                    # Get LLM service and synthesize answer
+                    llm_service = get_llm_service()
+                    logger.info(f"Calling LLM synthesis for query: '{request.query}' with {len(llm_chunks)} chunks")
+                    answer = llm_service.synthesize_answer(request.query, llm_chunks)
+                    overall_confidence = min(max(score for _, score in unique_matches[:max_results]) + 0.3, 1.0)
+                    
+                    logger.info(f"LLM synthesis successful for query: '{request.query}', answer length: {len(answer)}")
+                    
+                    # Ensure we got a meaningful answer
+                    if answer and len(answer.strip()) > 10 and "LLM synthesis unavailable" not in answer:
+                        logger.info("Using LLM synthesized answer")
+                    else:
+                        logger.warning("LLM answer seems invalid, will use fallback")
+                        raise Exception("Invalid LLM response")
+                    
+                except Exception as llm_error:
+                    logger.warning(f"LLM synthesis failed: {str(llm_error)}, falling back to context extraction")
+                    
+                    # Fallback to context extraction
+                    answer_parts = []
+                    for context in relevant_contexts[:3]:
+                        score = context['score']
+                        confidence_indicator = "High" if score > 0.8 else "Medium" if score > 0.5 else "Low"
+                        answer_parts.append(f"**From {context['filename']}** ({confidence_indicator} relevance):\n{context['content']}")
+                    
+                    answer = "\n\n".join(answer_parts)
+                    overall_confidence = max(score for _, score in unique_matches[:max_results])
+            else:
+                # Low confidence matches - provide context extraction
+                answer_parts = []
+                for context in relevant_contexts[:2]:
+                    answer_parts.append(f"From {context['filename']}: {context['content'][:200]}...")
+                
+                if answer_parts:
+                    answer = "\n\n".join(answer_parts)
+                    overall_confidence = max(score for _, score in unique_matches[:max_results])
+                else:
+                    answer = f"Found some references to '{request.query}' but couldn't extract clear information."
+                    overall_confidence = 0.2
+                    
+        except Exception as synthesis_error:
+            logger.error(f"Answer synthesis failed: {str(synthesis_error)}")
+            answer = f"Found information related to '{request.query}' but couldn't process it properly."
+            overall_confidence = 0.3
         
         return JSONResponse(
             status_code=200,
