@@ -110,19 +110,6 @@ async def handle_options(path: str):
         }
     )
 
-@app.get("/test/cors")
-async def test_cors():
-    """Simple CORS test endpoint"""
-    return JSONResponse(
-        status_code=200,
-        content={"message": "CORS test successful", "timestamp": "2024-10-16"},
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "*",
-            "Access-Control-Allow-Headers": "*",
-        }
-    )
-
 @app.get("/health/services")
 async def services_health_check():
     """Detailed health check for services"""

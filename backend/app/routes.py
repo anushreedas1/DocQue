@@ -17,49 +17,6 @@ documents_router = APIRouter(prefix="/documents", tags=["documents"])
 query_router = APIRouter(prefix="/query", tags=["query"])
 
 
-@documents_router.post("/upload/minimal")
-async def minimal_upload():
-    """Minimal upload endpoint for testing"""
-    return JSONResponse(
-        status_code=200,
-        content={"message": "Minimal upload endpoint working"},
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "*",
-            "Access-Control-Allow-Headers": "*",
-        }
-    )
-
-@documents_router.post("/upload/test")
-async def test_upload(file: UploadFile = File(...)):
-    """Simple upload test endpoint without processing"""
-    logger.info(f"Test upload request: {file.filename}, type: {file.content_type}")
-    
-    try:
-        # Just read the file and return basic info
-        file_content = await file.read()
-        
-        return JSONResponse(
-            status_code=200,
-            content={
-                "message": "Test upload successful",
-                "filename": file.filename,
-                "content_type": file.content_type,
-                "size": len(file_content)
-            },
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "*",
-                "Access-Control-Allow-Headers": "*",
-            }
-        )
-    except Exception as e:
-        logger.error(f"Test upload failed: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Test upload failed: {str(e)}"
-        )
-
 @documents_router.post("/upload")
 async def upload_document(file: UploadFile = File(...)):
     """Upload and process a document (PDF or TXT)"""
@@ -99,19 +56,39 @@ async def upload_document(file: UploadFile = File(...)):
         doc_id = document_storage.store_document(file.filename, text_content)
         logger.info(f"Document stored with ID: {doc_id}")
         
-        # Return immediately without processing to avoid timeout
-        # Processing can be done asynchronously later
-        logger.info(f"Document {doc_id} uploaded successfully, skipping processing to avoid timeout")
+        # Try lightweight processing (just chunking, no embeddings)
+        chunks_created = 0
+        try:
+            # Simple text chunking without embeddings to avoid timeout
+            chunk_size = 500
+            chunks = []
+            
+            # Split into chunks
+            for i in range(0, len(text_content), chunk_size):
+                chunk = text_content[i:i + chunk_size]
+                if chunk.strip():
+                    chunks.append(chunk.strip())
+            
+            # Store chunks in document (without embeddings)
+            document = document_storage.get_document(doc_id)
+            if document:
+                document.chunks = chunks
+                chunks_created = len(chunks)
+            
+            logger.info(f"Document {doc_id} processed with {chunks_created} chunks (no embeddings)")
+            
+        except Exception as e:
+            logger.warning(f"Lightweight processing failed for {doc_id}: {str(e)}")
         
         return JSONResponse(
             status_code=200,
             content={
-                "message": "Document uploaded successfully",
+                "message": "Document uploaded and processed successfully",
                 "document_id": doc_id,
                 "filename": file.filename,
                 "content_length": len(text_content),
-                "chunks_created": 0,
-                "note": "Document processing will be done asynchronously"
+                "chunks_created": chunks_created,
+                "note": "Document is ready for searching"
             },
             headers={
                 "Access-Control-Allow-Origin": "*",
@@ -217,24 +194,6 @@ async def delete_document(document_id: str):
     return {"message": "Document deleted successfully"}
 
 
-@query_router.get("/test")
-async def test_query():
-    """Simple query test endpoint"""
-    return JSONResponse(
-        status_code=200,
-        content={
-            "message": "Query endpoint is working",
-            "answer": "This is a test response",
-            "sources": [],
-            "confidence": 1.0
-        },
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "*",
-            "Access-Control-Allow-Headers": "*",
-        }
-    )
-
 @query_router.post("/")
 async def query_documents(request: QueryRequest):
     """Query documents and return relevant information"""
@@ -249,10 +208,8 @@ async def query_documents(request: QueryRequest):
             detail="Query cannot be empty"
         )
     
-    # Return simple response without processing to avoid timeout
-    # This prevents 502 errors that cause CORS issues
     try:
-        # Get all documents for basic search
+        # Get all documents for search
         documents = document_storage.get_all_documents()
         
         if not documents:
@@ -270,21 +227,75 @@ async def query_documents(request: QueryRequest):
                 }
             )
         
-        # Simple text search without embeddings to avoid timeout
+        # Enhanced search with multiple strategies
         query_lower = request.query.lower()
-        matching_docs = []
+        query_words = [word.strip() for word in query_lower.split() if len(word.strip()) > 2]
+        
+        # Strategy 1: Exact phrase matching
+        exact_matches = []
+        # Strategy 2: Word matching with scoring
+        word_matches = []
+        # Strategy 3: Partial matches
+        partial_matches = []
         
         for doc in documents:
-            if query_lower in doc.content.lower():
-                matching_docs.append(doc)
+            content_lower = doc.content.lower()
+            
+            # Check for exact phrase match
+            if query_lower in content_lower:
+                exact_matches.append((doc, 1.0))
+            
+            # Check for word matches
+            word_score = 0
+            matched_words = 0
+            for word in query_words:
+                if word in content_lower:
+                    matched_words += 1
+                    # Count occurrences for scoring
+                    word_score += content_lower.count(word)
+            
+            if matched_words > 0:
+                # Score based on percentage of query words found and frequency
+                score = (matched_words / len(query_words)) * 0.7 + min(word_score / 10, 0.3)
+                word_matches.append((doc, score))
+            
+            # Check for partial word matches (for typos, etc.)
+            elif len(query_words) == 1 and len(query_words[0]) > 4:
+                query_word = query_words[0]
+                for word in content_lower.split():
+                    if query_word in word or word in query_word:
+                        partial_matches.append((doc, 0.3))
+                        break
         
-        if not matching_docs:
+        # Combine and sort matches by score
+        all_matches = exact_matches + word_matches + partial_matches
+        all_matches.sort(key=lambda x: x[1], reverse=True)
+        
+        # Remove duplicates while preserving order
+        seen_docs = set()
+        unique_matches = []
+        for doc, score in all_matches:
+            if doc.id not in seen_docs:
+                unique_matches.append((doc, score))
+                seen_docs.add(doc.id)
+        
+        if not unique_matches:
+            # Provide helpful response with document overview
+            doc_topics = []
+            for doc in documents[:3]:  # Show first 3 documents
+                # Extract first few sentences as topic summary
+                sentences = doc.content.split('.')[:2]
+                topic = '.'.join(sentences).strip()[:100] + "..." if len('.'.join(sentences)) > 100 else '.'.join(sentences).strip()
+                doc_topics.append(f"• {doc.filename}: {topic}")
+            
+            topic_summary = "\n".join(doc_topics)
+            
             return JSONResponse(
                 status_code=200,
                 content={
-                    "answer": f"No documents contain information about '{request.query}'. The uploaded documents cover other topics.",
+                    "answer": f"I couldn't find specific information about '{request.query}' in your documents. Here's what your documents contain:\n\n{topic_summary}\n\nTry asking about these topics or upload more relevant documents.",
                     "sources": [doc.filename for doc in documents],
-                    "confidence": 0.0
+                    "confidence": 0.1
                 },
                 headers={
                     "Access-Control-Allow-Origin": "*",
@@ -293,34 +304,60 @@ async def query_documents(request: QueryRequest):
                 }
             )
         
-        # Create simple answer from matching documents
+        # Generate intelligent answer from matches
         answer_parts = []
         sources = []
+        max_results = min(request.max_results, len(unique_matches))
         
-        for doc in matching_docs[:request.max_results]:
-            # Find the relevant part of the document
+        for doc, score in unique_matches[:max_results]:
             content_lower = doc.content.lower()
-            query_pos = content_lower.find(query_lower)
             
-            if query_pos >= 0:
-                # Extract context around the query
-                start = max(0, query_pos - 100)
-                end = min(len(doc.content), query_pos + len(request.query) + 100)
+            # Find the best context for this document
+            contexts = []
+            
+            # Look for exact phrase first
+            if query_lower in content_lower:
+                pos = content_lower.find(query_lower)
+                start = max(0, pos - 150)
+                end = min(len(doc.content), pos + len(request.query) + 150)
                 context = doc.content[start:end].strip()
+                contexts.append(context)
+            
+            # Look for sentences containing query words
+            sentences = doc.content.split('.')
+            for sentence in sentences:
+                sentence_lower = sentence.lower()
+                word_count = sum(1 for word in query_words if word in sentence_lower)
+                if word_count > 0:
+                    contexts.append(sentence.strip())
+                    if len(contexts) >= 2:  # Limit contexts per document
+                        break
+            
+            # Use the best context
+            if contexts:
+                best_context = max(contexts, key=len) if len(contexts) > 1 else contexts[0]
+                # Clean up the context
+                if not best_context.endswith('.'):
+                    best_context += "..."
                 
-                answer_parts.append(f"From {doc.filename}: ...{context}...")
+                confidence_indicator = "High" if score > 0.8 else "Medium" if score > 0.5 else "Low"
+                answer_parts.append(f"**From {doc.filename}** ({confidence_indicator} relevance):\n{best_context}")
                 sources.append(doc.filename)
         
-        answer = "\n\n".join(answer_parts)
-        if not answer:
-            answer = f"Found references to '{request.query}' in the uploaded documents, but couldn't extract specific details."
+        # Create final answer
+        if answer_parts:
+            answer = "\n\n".join(answer_parts)
+            overall_confidence = max(score for _, score in unique_matches[:max_results])
+        else:
+            answer = f"Found some references to '{request.query}' but couldn't extract clear information."
+            overall_confidence = 0.2
         
         return JSONResponse(
             status_code=200,
             content={
                 "answer": answer,
                 "sources": sources,
-                "confidence": 0.8 if matching_docs else 0.0
+                "confidence": min(overall_confidence, 1.0)
             },
             headers={
                 "Access-Control-Allow-Origin": "*",
