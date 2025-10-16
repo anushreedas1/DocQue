@@ -23,10 +23,29 @@ app = FastAPI(
     version=settings.API_VERSION
 )
 
-# Configure CORS for frontend communication
-cors_origins = settings.cors_origins
-logger.info(f"Configuring CORS with origins: {cors_origins}")
+# Add custom CORS middleware that handles ALL requests
+@app.middleware("http")
+async def add_cors_headers(request: Request, call_next):
+    """Add CORS headers to ALL responses"""
+    try:
+        response = await call_next(request)
+    except Exception as e:
+        # Even for errors, return with CORS headers
+        logger.error(f"Request failed: {str(e)}")
+        response = JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error", "error": str(e)}
+        )
+    
+    # Add CORS headers to every response
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    response.headers["Access-Control-Max-Age"] = "86400"
+    
+    return response
 
+# Also add the standard CORS middleware as backup
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Allow all origins
@@ -76,16 +95,18 @@ async def health_check():
         logger.error(f"Health check failed: {str(e)}")
         return {"status": "unhealthy", "error": str(e)}
 
-@app.options("/documents/upload")
-async def upload_options():
-    """Handle preflight OPTIONS request for upload"""
+# Handle ALL OPTIONS requests globally
+@app.options("/{path:path}")
+async def handle_options(path: str):
+    """Handle preflight OPTIONS requests for all paths"""
     return JSONResponse(
         status_code=200,
         content={"message": "CORS preflight OK"},
         headers={
             "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Methods": "*",
             "Access-Control-Allow-Headers": "*",
+            "Access-Control-Max-Age": "86400",
         }
     )
 
@@ -146,33 +167,48 @@ async def services_health_check():
     
     return health_status
 
-# Error handlers
+# Error handlers with CORS
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-    """Handle HTTP exceptions"""
+    """Handle HTTP exceptions with CORS headers"""
     logger.error(f"HTTP {exc.status_code} error on {request.url}: {exc.detail}")
     return JSONResponse(
         status_code=exc.status_code,
-        content={"detail": exc.detail, "status_code": exc.status_code}
+        content={"detail": exc.detail, "status_code": exc.status_code},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+        }
     )
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """Handle request validation errors"""
+    """Handle request validation errors with CORS headers"""
     logger.error(f"Validation error on {request.url}: {exc.errors()}")
     return JSONResponse(
         status_code=422,
-        content={"detail": "Validation error", "errors": exc.errors()}
+        content={"detail": "Validation error", "errors": exc.errors()},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+        }
     )
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
-    """Handle general exceptions"""
+    """Handle general exceptions with CORS headers"""
     logger.error(f"Unhandled exception on {request.url}: {str(exc)}")
     logger.error(traceback.format_exc())
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal server error", "type": type(exc).__name__}
+        content={"detail": "Internal server error", "type": type(exc).__name__},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+        }
     )
 
 # Include routers

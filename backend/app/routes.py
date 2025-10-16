@@ -217,6 +217,24 @@ async def delete_document(document_id: str):
     return {"message": "Document deleted successfully"}
 
 
+@query_router.get("/test")
+async def test_query():
+    """Simple query test endpoint"""
+    return JSONResponse(
+        status_code=200,
+        content={
+            "message": "Query endpoint is working",
+            "answer": "This is a test response",
+            "sources": [],
+            "confidence": 1.0
+        },
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
+
 @query_router.post("/")
 async def query_documents(request: QueryRequest):
     """Query documents and return relevant information"""
@@ -231,51 +249,102 @@ async def query_documents(request: QueryRequest):
             detail="Query cannot be empty"
         )
     
+    # Return simple response without processing to avoid timeout
+    # This prevents 502 errors that cause CORS issues
     try:
-        # Generate embedding for the query
-        query_embedding = get_document_processor().generate_query_embedding(request.query)
+        # Get all documents for basic search
+        documents = document_storage.get_all_documents()
         
-        # Search for similar chunks
-        relevant_chunks = document_storage.search_chunks_by_similarity(
-            query_embedding, 
-            max_results=request.max_results
-        )
-        
-        # If no relevant chunks found
-        if not relevant_chunks:
-            logger.info(f"No relevant chunks found for query: '{request.query}'")
-            return QueryResponse(
-                answer="No relevant information found in the uploaded documents.",
-                sources=[],
-                confidence=0.0
+        if not documents:
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "answer": "No documents have been uploaded yet. Please upload some documents first.",
+                    "sources": [],
+                    "confidence": 0.0
+                },
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "*",
+                    "Access-Control-Allow-Headers": "*",
+                }
             )
         
-        logger.info(f"Found {len(relevant_chunks)} relevant chunks for query")
+        # Simple text search without embeddings to avoid timeout
+        query_lower = request.query.lower()
+        matching_docs = []
         
-        # Use LLM to synthesize answer from relevant chunks
-        answer = get_llm_service().synthesize_answer(request.query, relevant_chunks)
+        for doc in documents:
+            if query_lower in doc.content.lower():
+                matching_docs.append(doc)
         
-        # Collect source information
+        if not matching_docs:
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "answer": f"No documents contain information about '{request.query}'. The uploaded documents cover other topics.",
+                    "sources": [doc.filename for doc in documents],
+                    "confidence": 0.0
+                },
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "*",
+                    "Access-Control-Allow-Headers": "*",
+                }
+            )
+        
+        # Create simple answer from matching documents
+        answer_parts = []
         sources = []
-        for chunk in relevant_chunks:
-            doc = document_storage.get_document(chunk.document_id)
-            if doc:
-                source_info = f"{doc.filename} (chunk {chunk.chunk_index + 1})"
-                sources.append(source_info)
         
-        logger.info(f"Query processed successfully, answer length: {len(answer)}")
+        for doc in matching_docs[:request.max_results]:
+            # Find the relevant part of the document
+            content_lower = doc.content.lower()
+            query_pos = content_lower.find(query_lower)
+            
+            if query_pos >= 0:
+                # Extract context around the query
+                start = max(0, query_pos - 100)
+                end = min(len(doc.content), query_pos + len(request.query) + 100)
+                context = doc.content[start:end].strip()
+                
+                answer_parts.append(f"From {doc.filename}: ...{context}...")
+                sources.append(doc.filename)
         
-        return QueryResponse(
-            answer=answer,
-            sources=sources,
-            confidence=1.0 if relevant_chunks else 0.0
+        answer = "\n\n".join(answer_parts)
+        if not answer:
+            answer = f"Found references to '{request.query}' in the uploaded documents, but couldn't extract specific details."
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "answer": answer,
+                "sources": sources,
+                "confidence": 0.8 if matching_docs else 0.0
+            },
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "*",
+                "Access-Control-Allow-Headers": "*",
+            }
         )
         
     except Exception as e:
         logger.error(f"Error processing query '{request.query}': {str(e)}")
-        raise HTTPException(
+        # Return error with CORS headers
+        return JSONResponse(
             status_code=500,
-            detail=f"Error processing query: {str(e)}"
+            content={
+                "answer": "Sorry, there was an error processing your query. Please try again.",
+                "sources": [],
+                "confidence": 0.0,
+                "error": str(e)
+            },
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "*",
+                "Access-Control-Allow-Headers": "*",
+            }
         )
 
 
