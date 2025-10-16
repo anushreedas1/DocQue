@@ -8,7 +8,7 @@ import PyPDF2
 import io
 from .storage import document_storage
 from .models import QueryRequest, QueryResponse
-from .services import document_processor, llm_service
+from .services import get_document_processor, get_llm_service
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +16,31 @@ logger = logging.getLogger(__name__)
 documents_router = APIRouter(prefix="/documents", tags=["documents"])
 query_router = APIRouter(prefix="/query", tags=["query"])
 
+
+@documents_router.post("/upload/test")
+async def test_upload(file: UploadFile = File(...)):
+    """Simple upload test endpoint without processing"""
+    logger.info(f"Test upload request: {file.filename}, type: {file.content_type}")
+    
+    try:
+        # Just read the file and return basic info
+        file_content = await file.read()
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "message": "Test upload successful",
+                "filename": file.filename,
+                "content_type": file.content_type,
+                "size": len(file_content)
+            }
+        )
+    except Exception as e:
+        logger.error(f"Test upload failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Test upload failed: {str(e)}"
+        )
 
 @documents_router.post("/upload")
 async def upload_document(file: UploadFile = File(...)):
@@ -35,12 +60,15 @@ async def upload_document(file: UploadFile = File(...)):
     try:
         # Read file content
         file_content = await file.read()
+        logger.info(f"File content read successfully, size: {len(file_content)} bytes")
         
         # Extract text based on file type
         if file.content_type == "application/pdf":
             text_content = extract_pdf_text(file_content)
         else:  # text/plain
             text_content = file_content.decode('utf-8')
+        
+        logger.info(f"Text extracted successfully, length: {len(text_content)} characters")
         
         # Validate that we extracted some content
         if not text_content.strip():
@@ -53,32 +81,55 @@ async def upload_document(file: UploadFile = File(...)):
         doc_id = document_storage.store_document(file.filename, text_content)
         logger.info(f"Document stored with ID: {doc_id}")
         
-        # Process the document (chunk and generate embeddings)
-        processing_success = document_processor.process_document(doc_id)
-        
-        if not processing_success:
-            # If processing fails, remove the document and raise error
-            logger.error(f"Failed to process document {doc_id}")
-            document_storage.delete_document(doc_id)
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to process document for search indexing"
+        # Try to process the document (chunk and generate embeddings)
+        try:
+            processing_success = get_document_processor().process_document(doc_id)
+            
+            if not processing_success:
+                logger.warning(f"Document processing failed for {doc_id}, but document is stored")
+                # Don't fail the upload, just warn
+                processed_doc = document_storage.get_document(doc_id)
+                return JSONResponse(
+                    status_code=200,
+                    content={
+                        "message": "Document uploaded successfully (processing failed)",
+                        "document_id": doc_id,
+                        "filename": file.filename,
+                        "content_length": len(text_content),
+                        "chunks_created": 0,
+                        "warning": "Document processing failed, search functionality may be limited"
+                    }
+                )
+            
+            # Get the processed document to return chunk count
+            processed_doc = document_storage.get_document(doc_id)
+            logger.info(f"Document {doc_id} processed successfully with {len(processed_doc.chunks)} chunks")
+            
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "message": "Document uploaded and processed successfully",
+                    "document_id": doc_id,
+                    "filename": file.filename,
+                    "content_length": len(text_content),
+                    "chunks_created": len(processed_doc.chunks)
+                }
             )
-        
-        # Get the processed document to return chunk count
-        processed_doc = document_storage.get_document(doc_id)
-        logger.info(f"Document {doc_id} processed successfully with {len(processed_doc.chunks)} chunks")
-        
-        return JSONResponse(
-            status_code=200,
-            content={
-                "message": "Document uploaded and processed successfully",
-                "document_id": doc_id,
-                "filename": file.filename,
-                "content_length": len(text_content),
-                "chunks_created": len(processed_doc.chunks)
-            }
-        )
+            
+        except Exception as processing_error:
+            logger.error(f"Document processing failed for {doc_id}: {str(processing_error)}")
+            # Don't fail the upload, just return without processing
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "message": "Document uploaded successfully (processing failed)",
+                    "document_id": doc_id,
+                    "filename": file.filename,
+                    "content_length": len(text_content),
+                    "chunks_created": 0,
+                    "warning": f"Document processing failed: {str(processing_error)}"
+                }
+            )
         
     except UnicodeDecodeError:
         logger.error(f"Unicode decode error for file: {file.filename}")
@@ -86,6 +137,9 @@ async def upload_document(file: UploadFile = File(...)):
             status_code=400,
             detail="Unable to decode text file. Please ensure it's in UTF-8 format."
         )
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
     except Exception as e:
         logger.error(f"Error processing document {file.filename}: {str(e)}")
         raise HTTPException(
@@ -143,7 +197,7 @@ async def query_documents(request: QueryRequest):
     
     try:
         # Generate embedding for the query
-        query_embedding = document_processor.generate_query_embedding(request.query)
+        query_embedding = get_document_processor().generate_query_embedding(request.query)
         
         # Search for similar chunks
         relevant_chunks = document_storage.search_chunks_by_similarity(
@@ -163,7 +217,7 @@ async def query_documents(request: QueryRequest):
         logger.info(f"Found {len(relevant_chunks)} relevant chunks for query")
         
         # Use LLM to synthesize answer from relevant chunks
-        answer = llm_service.synthesize_answer(request.query, relevant_chunks)
+        answer = get_llm_service().synthesize_answer(request.query, relevant_chunks)
         
         # Collect source information
         sources = []

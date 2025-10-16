@@ -16,9 +16,25 @@ class DocumentProcessor:
     
     def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
         """Initialize with a sentence transformer model"""
-        self.embedding_model = SentenceTransformer(model_name)
-        self.chunk_size = 500  # characters per chunk
-        self.chunk_overlap = 50  # overlap between chunks
+        try:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"Initializing SentenceTransformer with model: {model_name}")
+            
+            # Hardcoded cache directory for models
+            cache_dir = "./models"
+            os.makedirs(cache_dir, exist_ok=True)
+            
+            self.embedding_model = SentenceTransformer(model_name, cache_folder=cache_dir)
+            self.chunk_size = 500  # Hardcoded chunk size
+            self.chunk_overlap = 50  # Hardcoded overlap
+            
+            logger.info("DocumentProcessor initialized successfully")
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to initialize DocumentProcessor: {str(e)}")
+            raise RuntimeError(f"Failed to initialize DocumentProcessor: {str(e)}")
     
     def chunk_text(self, text: str) -> List[str]:
         """Split text into overlapping chunks"""
@@ -70,8 +86,15 @@ class DocumentProcessor:
     
     def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
         """Generate embeddings for a list of texts"""
-        embeddings = self.embedding_model.encode(texts)
-        return embeddings.tolist()
+        try:
+            embeddings = self.embedding_model.encode(texts)
+            return embeddings.tolist()
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to generate embeddings: {str(e)}")
+            # Return dummy embeddings as fallback
+            return [[0.0] * 384 for _ in texts]
     
     def process_document(self, doc_id: str) -> bool:
         """Process a document: chunk it and generate embeddings"""
@@ -103,8 +126,15 @@ class DocumentProcessor:
     
     def generate_query_embedding(self, query: str) -> List[float]:
         """Generate embedding for a search query"""
-        embedding = self.embedding_model.encode([query])
-        return embedding[0].tolist()
+        try:
+            embedding = self.embedding_model.encode([query])
+            return embedding[0].tolist()
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to generate query embedding: {str(e)}")
+            # Return dummy embedding as fallback
+            return [0.0] * 384
 
 
 class LLMService:
@@ -112,12 +142,19 @@ class LLMService:
     
     def __init__(self):
         """Initialize OpenAI client"""
-        self.api_key = os.getenv("OPENAI_API_KEY")
-        if not self.api_key:
-            raise ValueError("OPENAI_API_KEY environment variable is required")
-        
-        self.base_url = "https://openrouter.ai/api/v1/chat/completions"
-        self.model = "openai/gpt-3.5-turbo"
+        try:
+            self.api_key = os.getenv("OPENAI_API_KEY")
+            if not self.api_key:
+                raise ValueError("OPENAI_API_KEY environment variable is required")
+            
+            # Hardcoded API configuration
+            self.base_url = "https://openrouter.ai/api/v1/chat/completions"
+            self.model = "openai/gpt-3.5-turbo"
+            self.max_tokens = 500
+            self.temperature = 0.3
+            self.timeout = 30
+        except Exception as e:
+            raise RuntimeError(f"Failed to initialize LLMService: {str(e)}")
     
     def synthesize_answer(self, query: str, relevant_chunks: List[DocumentChunk]) -> str:
         """Synthesize an answer using LLM based on query and relevant document chunks"""
@@ -169,11 +206,11 @@ Please provide a clear, concise answer based on the information in the documents
                         "content": prompt
                     }
                 ],
-                "max_tokens": 500,
-                "temperature": 0.3
+                "max_tokens": self.max_tokens,
+                "temperature": self.temperature
             }
             
-            response = requests.post(self.base_url, headers=headers, json=payload, timeout=30)
+            response = requests.post(self.base_url, headers=headers, json=payload, timeout=self.timeout)
             response.raise_for_status()
             
             result = response.json()
@@ -190,6 +227,32 @@ Please provide a clear, concise answer based on the information in the documents
             return fallback_answer + f"\n(Note: LLM synthesis unavailable: {str(e)})"
 
 
-# Global service instances
-document_processor = DocumentProcessor()
-llm_service = LLMService()
+# Global service instances - lazy initialization
+document_processor = None
+llm_service = None
+
+def get_document_processor():
+    """Get or create document processor instance"""
+    global document_processor
+    if document_processor is None:
+        try:
+            document_processor = DocumentProcessor()
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to initialize DocumentProcessor: {str(e)}")
+            raise RuntimeError(f"DocumentProcessor initialization failed: {str(e)}")
+    return document_processor
+
+def get_llm_service():
+    """Get or create LLM service instance"""
+    global llm_service
+    if llm_service is None:
+        try:
+            llm_service = LLMService()
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to initialize LLMService: {str(e)}")
+            raise RuntimeError(f"LLMService initialization failed: {str(e)}")
+    return llm_service

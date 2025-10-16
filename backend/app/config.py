@@ -12,51 +12,60 @@ class Settings:
     API_TITLE: str = "Knowledge Base Search Engine"
     API_VERSION: str = "1.0.0"
     
-    # Environment Configuration
-    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
+    # Environment Configuration (Hardcoded for production)
+    ENVIRONMENT: str = "production"
     
-    # CORS Configuration - Allow all origins
+    # CORS Configuration (Hardcoded for production)
     @property
     def cors_origins(self) -> List[str]:
-        return ["*"]
+        return [
+            "https://doc-que.vercel.app",
+            "https://docque.vercel.app", 
+            "https://*.vercel.app",
+            "http://localhost:3000",  # For development
+            "*"  # Allow all for now
+        ]
     
-    # File Upload Configuration
-    MAX_FILE_SIZE: int = 10 * 1024 * 1024  # 10MB
+    # File Upload Configuration (Hardcoded)
+    MAX_FILE_SIZE: int = 10485760  # 10MB in bytes
     ALLOWED_FILE_TYPES: List[str] = [".pdf", ".txt"]
     
-    # OpenAI Configuration
+    # OpenAI Configuration (Only this comes from env)
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     
-    # Embedding Configuration
-    CHUNK_SIZE: int = 1000
-    CHUNK_OVERLAP: int = 200
+    # Embedding Configuration (Hardcoded)
+    CHUNK_SIZE: int = 500
+    CHUNK_OVERLAP: int = 50
     
-    # Server Configuration
-    HOST: str = os.getenv("HOST", "0.0.0.0")
-    PORT: int = int(os.getenv("PORT", "8000"))
+    # Server Configuration (Hardcoded)
+    HOST: str = "0.0.0.0"
+    PORT: int = 8000
     
-    # Logging Configuration
-    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO" if ENVIRONMENT == "production" else "DEBUG")
+    # Database/Storage Configuration (Hardcoded)
+    DATA_DIR: str = "./data"
+    
+    # Model Configuration (Hardcoded)
+    SENTENCE_TRANSFORMERS_HOME: str = "./models"
+    EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
+    
+    # Health Check Configuration (Hardcoded)
+    HEALTH_CHECK_TIMEOUT: int = 30
+    
+    # Logging Configuration (Hardcoded)
+    LOG_LEVEL: str = "INFO"
     
     def configure_logging(self):
         """Configure logging for the application"""
         log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
         
-        if self.ENVIRONMENT == "production":
-            # Production logging configuration
-            logging.basicConfig(
-                level=getattr(logging, self.LOG_LEVEL),
-                format=log_format,
-                handlers=[
-                    logging.StreamHandler(),  # For Render logs
-                ]
-            )
-        else:
-            # Development logging configuration
-            logging.basicConfig(
-                level=getattr(logging, self.LOG_LEVEL),
-                format=log_format
-            )
+        # Production logging configuration (hardcoded)
+        logging.basicConfig(
+            level=logging.INFO,
+            format=log_format,
+            handlers=[
+                logging.StreamHandler(),  # For Render logs
+            ]
+        )
         
         # Set specific loggers
         logging.getLogger("uvicorn").setLevel(logging.INFO)

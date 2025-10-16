@@ -3,19 +3,26 @@
  */
 
 // Environment detection
-export const IS_PRODUCTION = process.env.NODE_ENV === 'production';
-export const IS_DEVELOPMENT = process.env.NODE_ENV === 'development';
+export const IS_PRODUCTION = true; // Hardcoded for production
+export const IS_DEVELOPMENT = false; // Hardcoded for production
+
+// Application Configuration
+export const APP_CONFIG = {
+  NAME: 'DocQue',
+  VERSION: '1.0.0',
+  ENVIRONMENT: 'production',
+} as const;
 
 // API Configuration
 export const API_CONFIG = {
   BASE_URL: 'https://docque.onrender.com',
-  TIMEOUT: IS_PRODUCTION ? 60000 : 30000, // 60 seconds in production, 30 in dev
-  RETRY_ATTEMPTS: IS_PRODUCTION ? 2 : 3, // Fewer retries in production
+  TIMEOUT: 60000, // 60 seconds
+  RETRY_ATTEMPTS: 2,
 } as const;
 
 // File Upload Configuration
 export const UPLOAD_CONFIG = {
-  MAX_FILE_SIZE: 10 * 1024 * 1024, // 10MB
+  MAX_FILE_SIZE: 10485760, // 10MB in bytes
   ALLOWED_TYPES: ['application/pdf', 'text/plain'],
   ALLOWED_EXTENSIONS: ['pdf', 'txt'],
 } as const;
@@ -48,8 +55,8 @@ export const ERROR_MESSAGES = {
 
 // Logging Configuration
 export const LOGGING_CONFIG = {
-  ENABLED: IS_DEVELOPMENT || process.env.NEXT_PUBLIC_ENABLE_LOGGING === 'true',
-  LEVEL: IS_PRODUCTION ? 'error' : 'debug',
+  ENABLED: false, // Disabled for production
+  LEVEL: 'error',
 } as const;
 
 // Success Messages
